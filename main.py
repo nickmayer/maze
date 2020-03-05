@@ -3,7 +3,7 @@
 from maze import Maze
 
 import random
-random.seed(19790122)
+random.seed(None)
 
-maze = Maze(10, 10)
+maze = Maze(20, 20)
 print(maze)

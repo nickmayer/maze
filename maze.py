@@ -4,15 +4,18 @@ from dataclasses import dataclass
 from dataclasses import field
 from typing import Dict
 from typing import Iterable
+from typing import List
 from typing import Set
 
 
-@dataclass(frozen=True)
+@dataclass(order=True, frozen=True)
 class Point:
   """Represents a 2d position in the maze"""
   x: int
   y: int
 
+  def __repr__(self):
+    return f'({self.x}, {self.y})'
 
 class Maze(object):
   """Represents a two dimensional maze"""
@@ -27,6 +30,10 @@ class Maze(object):
     self.width = width
     self.height = height
     self.start = Point(0, random.randrange(0, height))
+    self.end = Point(width - 1, random.randrange(0, height))
+
+    test = str(self)
+
     self._create_maze()
 
   @dataclass
@@ -37,6 +44,24 @@ class Maze(object):
 
     def connect(self, connect_to):
       self.connections.add(connect_to)
+
+    def wall_above(self):
+      return Point(self.position.x, self.position.y - 1) not in self.connections
+
+    def wall_below(self):
+      return Point(self.position.x, self.position.y + 1) not in self.connections
+
+    def wall_left(self):
+      return Point(self.position.x - 1, self.position.y) not in self.connections
+
+    def wall_right(self):
+      return Point(self.position.x + 1, self.position.y) not in self.connections
+
+    def connected(self) -> bool:
+      if self.connections:
+        return True
+      else:
+        return False
 
   class _Cells(dict):
     """
@@ -99,7 +124,6 @@ class Maze(object):
     # Initialize the cells to a default dict, which will ensure that all
     # requested cells will be initialized to having no connections (has 4 walls)
     # and add the start cell to the dictionary
-    _ = self._cells[self.start]
     adj_cells: Set[Point]
     adj_cells = set(get_adjacent_points(self.start))
 
@@ -110,11 +134,87 @@ class Maze(object):
 
       # Chose a random wall that connects to the maze, and remove it
       adj = set(get_adjacent_points(cell))
-      connections = [p for p in adj if p in self._cells]
+      connections = [p for p in adj if (p == self.start or
+                                        self._cells[p].connected())]
       connect_to = random.choice(connections)
       self._cells[cell].connect(connect_to)
       self._cells[connect_to].connect(cell)
 
       # Add all of the adjacent points to this new cell that aren't in the maze
-      non_connections = {p for p in adj if p not in self._cells}
+      non_connections = {p for p in adj if not self._cells[p].connected()}
       adj_cells |= non_connections
+
+  def __str__(self):
+    """
+    This will print the text representation of a single cell.
+
+    The example shows which characters belong to cell (1,1). The characters
+    also need to access the cell to the left and above to determine the proper
+    corner character 'C'
+          0   1   2
+        ┌───┬───┬───┐     N
+      0 │   │   │   │    W┼E
+        ├───CXXX┼───┤     S
+      1 │   Y␣$␣|   │
+        ├───┼───┼───┤
+      2 │   │   │   │
+        └───┴───┴───┘
+    """
+    d = {
+        'SENW': '┼',
+        'SEN': '├', 'ENW': '┴', 'SNW': '┤', 'SEW': '┬',
+        'EN': '└', 'NW': '┘', 'SE': '┌', 'SW': '┐',
+        'SN': '│', 'N': '│', 'S': '│',
+        'EW': '─', 'E': '─', 'W': '─'
+    }
+
+    def get_corner(p: Point) -> str:
+      cell = self._cells[p]
+      corner_description: str = ""
+      if cell.wall_left():
+        corner_description += 'S'
+      if cell.wall_above():
+        corner_description += 'E'
+      try:
+        if self._cells.get(Point(p.x, p.y - 1)).wall_left():
+          corner_description += 'N'
+      except AttributeError:
+        pass
+      try:
+        if self._cells.get(Point(p.x - 1, p.y)).wall_above():
+          corner_description += 'W'
+      except AttributeError:
+        pass
+      return d.get(corner_description, '⚠')
+
+    lines: List[str] = []
+    for y in range(0, self.height):
+      line1: str = ''
+      line2: str = ''
+      for x in range(0, self.width):
+        p = Point(x, y)
+        cell = self._cells[p]
+        line1 += get_corner(p) + (d['EW'] * 3 if cell.wall_above() else '   ')
+        line2 += d['SN'] + '   ' if (cell.wall_left()
+                                     and not p == self.start) else '    '
+      if y == 0:
+        line1 += d['SW']
+      elif self._cells[Point(self.width - 1, y)].wall_above():
+        line1 += d['SNW']
+      else:
+        line1 += d['SN']
+      line2 += d['SN'] if y != self.end.y else ' '
+      lines.append(line1)
+      lines.append(line2)
+
+    # The bottom line has to look at the bottom row to decide if there is a wall
+    #  going up to connect.
+    bottom = d['EN'] + d['EW'] * 3
+    for x in range(1, self.width):
+      p = Point(x, self.height - 1)
+      bottom += ((d['ENW'] if self._cells[p].wall_left() else d['EW'])
+                 + (d['EW'] * 3))
+    bottom += d['NW']
+
+    lines.append(bottom)
+    return '\n'.join(lines)
