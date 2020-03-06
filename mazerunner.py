@@ -111,7 +111,8 @@ class MazeRunner:
       if not winner:
         status = f'{loop_count} steps taken'
       else:
-        status = f'You won in {loop_count} moves. It took {total_time:.2f} seconds.'
+        status = f'You won in {loop_count} moves. ' \
+                 f'It took {total_time:.2f} seconds.'
       status_screen.addstr(1, 2, status, curses.A_BLINK if winner else 0)
       status_screen.refresh()
 
