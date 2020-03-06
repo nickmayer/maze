@@ -17,6 +17,7 @@ class Point:
   def __repr__(self):
     return f'({self.x}, {self.y})'
 
+
 class Maze(object):
   """Represents a two dimensional maze"""
   width: int
@@ -152,14 +153,16 @@ class Maze(object):
     also need to access the cell to the left and above to determine the proper
     corner character 'C'
           0   1   2
-        ┌───┬───┬───┐     N
-      0 │   │   │   │    W┼E
-        ├───CXXX┼───┤     S
-      1 │   Y␣$␣|   │
+        ┌───┬───┬───┐
+      0 │   │   │   │      N
+        ├───CXXX┼───┤    W─┼─E
+      1 │   Y␣$␣|   │      S
         ├───┼───┼───┤
       2 │   │   │   │
         └───┴───┴───┘
     """
+    # For different draw styles:
+    #  https://en.wikipedia.org/wiki/Box-drawing_character
     d = {
         'SENW': '┼',
         'SEN': '├', 'ENW': '┴', 'SNW': '┤', 'SEW': '┬',
