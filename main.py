@@ -2,16 +2,30 @@
 import sys
 
 from maze import AbsoluteDirection
+from maze import RelativeDirection
 from mazerunner import Algorithm
 from mazerunner import MazeRunner, Runner, Direction
 
 
 def ask_the_user(runner: Runner) -> Direction:
+  """Ask the user what to do (in absolute UP, DOWN, etc.)"""
   return runner.ask_absolute()
 
 
 def confuse_the_user(runner: Runner) -> Direction:
+  """Ask the user what to do (in relative FORWARD, BACKWARD, etc.)"""
   return runner.ask_relative()
+
+
+def multi_me(runner: Runner) -> Direction:
+  """Clone yourself at the beginning, and hope you can just walk to the end"""
+  if (len(runner.history()) == 0
+      and runner.name() is not "Lefty"
+          and runner.name() is not "Mr. Right"):
+    runner.clone(RelativeDirection.LEFT, "Lefty")
+    runner.clone(RelativeDirection.RIGHT, "Mr. Right")
+
+  return RelativeDirection.FORWARD
 
 
 class AlgorithmWithAPast:
@@ -48,12 +62,13 @@ if __name__ == '__main__':
   else:
     maze_seed = 19790122
 
-  maze = MazeRunner(width, height, maze_seed=maze_seed)
+  maze = MazeRunner(width, height, delay_time=0.25, maze_seed=maze_seed)
 
   choices = [
       ('Keyboard movement (absolute)', ask_the_user),
       ('Keyboard movement (relative)', confuse_the_user),
-      ('I know the way!', AlgorithmWithAPast().i_know_the_way)
+      ('I know the way!', AlgorithmWithAPast().i_know_the_way),
+      ('Multi-me', multi_me)
   ]
   print("Algorithms: ")
   for num, c in enumerate(choices):

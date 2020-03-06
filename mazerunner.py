@@ -1,3 +1,6 @@
+# -*- coding: utf-8 -*-
+from __future__ import annotations
+
 import curses
 import random
 import time
@@ -33,6 +36,22 @@ class Runner:
     """
     pass
 
+  def clone(self, direction: Direction, name: str = None) -> None:
+    """
+    Make a clone of yourself, pointing in the given direction.
+    """
+    pass
+
+  def history(self) -> List[Point]:
+    """
+    Returns a list of all points this runner has visited, from first to current.
+    """
+    pass
+
+  def name(self) -> str:
+    """What is this runner's name?"""
+    pass
+
 
 # This is the type needed when creating a new runner. The Algorithm must be
 #  given when calling the MazeRunner.run method, as it determines what path will
@@ -44,8 +63,8 @@ class MazeRunner:
   """Curses based console maze runner"""
   maze: Maze
   _delay_time: float
-  _runners: List['_RunnerImpl'] = []
-  _crashed: List['_RunnerImpl'] = []
+  _runners: List[_RunnerImpl] = []
+  _crashed: List[_RunnerImpl] = []
 
   def __init__(self,
                width,
@@ -60,6 +79,12 @@ class MazeRunner:
     r = random.Random()
     r.seed(maze_seed, version=1)
     self.maze = Maze(width, height, r)
+
+  def clone_runner(self,
+                   runner: _RunnerImpl,
+                   direction: Direction,
+                   name: str):
+    self._runners.append(runner.duplicate(direction, name))
 
   def run(self, algorithm: Algorithm):
     """Run the maze. Returns true if it was solved"""
@@ -168,22 +193,44 @@ class MazeRunner:
 
 class _RunnerImpl(Runner):
   """Data for a person running the maze"""
-  parent: MazeRunner
   position: Point
-  history: List[Point]
+  _name: str = 'Runner0000'
+  _parent: MazeRunner
   _heading: AbsoluteDirection
+  _history: List[Point]
 
   def __init__(self, parent: MazeRunner, position: Point, screen):
-    self.parent = parent
     self.position = position
-    self.history = []
+    self._history = []
     self.screen = screen
     # We always start on the left edge, so we know we're going right to start
     self._heading = AbsoluteDirection.RIGHT
+    self._parent = parent
+
+  def history(self) -> List[Point]:
+    return list(self._history)
+
+  def name(self) -> str:
+    return self._name
+
+  def clone(self, direction: Direction, name: str = None) -> None:
+    self._parent.clone_runner(self, direction, name)
+
+  def duplicate(self, direction: Direction, name: str = None) -> _RunnerImpl:
+    global _clone_num
+    if name is None:
+      _clone_num += 1
+      name = f'Runner{_clone_num:04d}'
+
+    c = _RunnerImpl(self._parent, self.position, None)
+    c._history = list(self._history)
+    c._name = name
+    c._heading = self._to_absolue(direction)
+    return c
 
   def can_move(self, direction: Direction) -> bool:
     abs_direction: AbsoluteDirection = self._to_absolue(direction)
-    return self.parent.maze.can_move(self.position, abs_direction)
+    return self._parent.maze.can_move(self.position, abs_direction)
 
   def heading(self) -> AbsoluteDirection:
     return self._heading
@@ -223,7 +270,7 @@ class _RunnerImpl(Runner):
     abs_direction: AbsoluteDirection = self._to_absolue(direction)
     self._heading = abs_direction
     if abs_direction != AbsoluteDirection.NONE and self.can_move(abs_direction):
-      self.history.append(self.position)
+      self._history.append(self.position)
       self.position = Maze.move(self.position, abs_direction)
       return True
     return False
@@ -252,3 +299,5 @@ class _RunnerImpl(Runner):
     }
     return h.get(self.heading(), '@')
 
+
+_clone_num = 0
