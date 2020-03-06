@@ -10,6 +10,7 @@ from typing import Dict, Union
 from typing import Iterable
 from typing import List
 from typing import Set
+from typing import Tuple
 
 
 @unique
@@ -19,6 +20,15 @@ class RelativeDirection(Enum):
   BACKWARD = auto()
   LEFT = auto()
   RIGHT = auto()
+
+  def __str__(self):
+    h = {
+        RelativeDirection.FORWARD: '△',
+        RelativeDirection.BACKWARD: '▽',
+        RelativeDirection.LEFT: '◁',
+        RelativeDirection.RIGHT: '▷'
+    }
+    return h.get(self, '□')
 
 
 @unique
@@ -66,6 +76,15 @@ class AbsoluteDirection(Enum):
       return RelativeDirection.RIGHT
     raise Exception(f'Invalid direction {self} {other}')
 
+  def __str__(self):
+    h = {
+        AbsoluteDirection.UP: '▲',
+        AbsoluteDirection.DOWN: '▼',
+        AbsoluteDirection.LEFT: '◀',
+        AbsoluteDirection.RIGHT: '▶'
+    }
+    return h.get(self, '■')
+
 
 # Generic direction can be either relative (up, down, etc.) or cardinal (north
 #  south, etc.)
@@ -92,6 +111,18 @@ class Point:
 
   def right(self) -> Point:
     return Point(self.x + 1, self.y)
+
+  def get_adjacent_points(self) -> Iterable[Tuple[Point, AbsoluteDirection]]:
+    yield (Point(self.x - 1, self.y), AbsoluteDirection.LEFT)
+    yield (Point(self.x + 1, self.y), AbsoluteDirection.RIGHT)
+    yield (Point(self.x, self.y - 1), AbsoluteDirection.UP)
+    yield (Point(self.x, self.y + 1), AbsoluteDirection.DOWN)
+
+  def direction(self, pt: Point) -> AbsoluteDirection:
+    # found is the direction for any adjacent points that match pt. List will
+    #  always contain 0 or 1 elements.
+    found = [x[1] for x in self.get_adjacent_points() if x[0] == pt]
+    return next(iter(found), AbsoluteDirection.NONE)
 
 
 class Maze(object):

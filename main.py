@@ -18,13 +18,12 @@ def confuse_the_user(runner: Runner) -> Direction:
 
 
 def multi_me(runner: Runner) -> Direction:
-  """Clone yourself at the beginning, and hope you can just walk to the end"""
-  if (len(runner.history()) == 0
-      and runner.name() is not "Lefty"
-          and runner.name() is not "Mr. Right"):
+  """
+  Clone yourself at the beginning, and hope one of you can just walk to the end
+  """
+  if runner.born_at() is None and runner.age() is 1:
     runner.clone(RelativeDirection.LEFT, "Lefty")
     runner.clone(RelativeDirection.RIGHT, "Mr. Right")
-
   return RelativeDirection.FORWARD
 
 

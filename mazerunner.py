@@ -4,6 +4,7 @@ from __future__ import annotations
 import curses
 import random
 import time
+from itertools import tee
 from typing import Callable, List
 
 from maze import Direction, AbsoluteDirection, RelativeDirection, Maze, Point
@@ -12,7 +13,9 @@ from maze import Direction, AbsoluteDirection, RelativeDirection, Maze, Point
 class Runner:
   def can_move(self, direction: Direction) -> bool:
     """
-    Returns True if there are no walls blocking movement in the given direction
+    Returns True if there are no walls blocking movement in the given direction.
+    Watch out, if you move in a direction that isn't allowed the high-voltage
+    walls will zap you!
     """
     pass
 
@@ -38,7 +41,12 @@ class Runner:
 
   def clone(self, direction: Direction, name: str = None) -> None:
     """
-    Make a clone of yourself, pointing in the given direction.
+    Make a clone of yourself, pointing in the given direction. Will set the
+    born at position.
+
+    Note: if you attempt to clone your self to have more copies of you than
+    there are in the maze, a black hole is formed and sucks the maze into a
+    singularity.
     """
     pass
 
@@ -48,14 +56,40 @@ class Runner:
     """
     pass
 
+  def relative_history(self) -> List[RelativeDirection]:
+    """
+    Returns a list of all directions this runner took, from first to current.
+    """
+    pass
+
   def name(self) -> str:
     """What is this runner's name?"""
+    pass
+
+  def born_at(self) -> Point:
+    """
+    Returns where this runner first came into existence. Will be None for the
+    initial runner.
+    """
+    pass
+
+  def age(self) -> int:
+    """
+    Returns how long since this runner came into existence. Can be used along
+    with history() to see what has been done since the point at which the runner
+    was born.
+    If age() > len(history()) congratulations! that means this runner is the
+    very first runner to ever exist, and as far as we can tell has always
+    existed (has a born_at() of None!)
+    """
     pass
 
 
 # This is the type needed when creating a new runner. The Algorithm must be
 #  given when calling the MazeRunner.run method, as it determines what path will
-#  be taken.
+#  be taken. If you return a direction that results in walking into one of the
+#  electrified walls the Runner will be vaporized and will no longer exist in
+#  the maze.
 Algorithm = Callable[[Runner], Direction]
 
 
@@ -84,6 +118,10 @@ class MazeRunner:
                    runner: _RunnerImpl,
                    direction: Direction,
                    name: str):
+    if len(self._runners) > self.maze.height * self.maze.width:
+      raise Exception(f"Not allowed to have more runners ({len(self._runners)})"
+                      f" than cells in the maze"
+                      f" ({self.maze.height * self.maze.width})!")
     self._runners.append(runner.duplicate(direction, name))
 
   def run(self, algorithm: Algorithm):
@@ -118,7 +156,7 @@ class MazeRunner:
     maze_screen.bkgd(' ', curses.color_pair(1))
 
     # Create screen for the status field
-    status_screen = curses.newwin(4, maze_char_w - 2, maze_char_h, 1)
+    status_screen = curses.newwin(6, maze_char_w - 2, maze_char_h, 1)
     status_screen.bkgd(' ', curses.color_pair(3))
     status_screen.box()
 
@@ -151,6 +189,14 @@ class MazeRunner:
         blink = True
       else:
         status = f'{loop_count} steps taken'
+
+      if winner or len(self._runners) == 1:
+        r = winner or self._runners[0]
+        absolute = ' '.join([str(d) for d in r.absolute_history()])
+        relative = ' '.join([str(d) for d in r.relative_history()])
+        status_screen.addstr(3, 2, absolute[0:maze_char_w-1])
+        status_screen.addstr(4, 2, relative[0:maze_char_w-1])
+
       status_screen.addstr(1, 2, status, curses.A_BLINK if blink else 0)
       time_status = f'{total_time:.5f} seconds elapsed.'
       status_screen.addstr(2, 2, time_status, curses.A_BLINK if blink else 0)
@@ -198,6 +244,7 @@ class _RunnerImpl(Runner):
   _parent: MazeRunner
   _heading: AbsoluteDirection
   _history: List[Point]
+  _born_at_index: int = None
 
   def __init__(self, parent: MazeRunner, position: Point, screen):
     self.position = position
@@ -208,10 +255,35 @@ class _RunnerImpl(Runner):
     self._parent = parent
 
   def history(self) -> List[Point]:
-    return list(self._history)
+    # It is important that list + list returns a copy so that the caller doesn't
+    #  mistakenly rewrite the past, causing a paradox that could end existence!
+    return self._history + [self.position]
+
+  def absolute_history(self) -> List[AbsoluteDirection]:
+    past_points = self.history()
+    # Tee will make 2 streams from the iterable. We then advance end by 1
+    start, end = tee(past_points)
+    next(end, None)
+    return [a.direction(b) for a, b in zip(start, end)]
+
+  def relative_history(self) -> List[RelativeDirection]:
+    absolute_directions = ([AbsoluteDirection.RIGHT] + self.absolute_history())
+    start, end = tee(absolute_directions)
+    next(end, None)
+    return [a.relative(b) for a, b in zip(start, end)]
 
   def name(self) -> str:
     return self._name
+
+  def born_at(self) -> Point:
+    return ((self.history())[self._born_at_index]
+            if self._born_at_index is not None
+            else None)
+
+  def age(self) -> int:
+    return len(self._history) - (self._born_at_index
+                                 if self._born_at_index is not None
+                                 else -1)
 
   def clone(self, direction: Direction, name: str = None) -> None:
     self._parent.clone_runner(self, direction, name)
@@ -223,6 +295,7 @@ class _RunnerImpl(Runner):
       name = f'Runner{_clone_num:04d}'
 
     c = _RunnerImpl(self._parent, self.position, None)
+    c._born_at_index = len(self._history)
     c._history = list(self._history)
     c._name = name
     c._heading = self._to_absolue(direction)
@@ -291,13 +364,7 @@ class _RunnerImpl(Runner):
     raise Exception(f"Unexpected direction {direction}")
 
   def display(self) -> str:
-    h = {
-      AbsoluteDirection.UP: '▲',
-      AbsoluteDirection.DOWN: '▼',
-      AbsoluteDirection.LEFT: '◀',
-      AbsoluteDirection.RIGHT: '▶'
-    }
-    return h.get(self.heading(), '@')
+    return str(self.heading())
 
 
 _clone_num = 0
