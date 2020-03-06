@@ -175,7 +175,7 @@ class MazeRunner:
         maze_screen.addstr(p.y, p.x, runner.display())
       for runner in self._crashed:
         p: Point = runner.char_position()
-        maze_screen.addstr(p.y, p.x-1, runner.display(), curses.color_pair(2))
+        maze_screen.addstr(p.y, p.x, runner.display(), curses.color_pair(2))
       maze_screen.refresh()
 
       # Draw the status area

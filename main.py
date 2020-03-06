@@ -21,7 +21,7 @@ def multi_me(runner: Runner) -> Direction:
   """
   Clone yourself at the beginning, and hope one of you can just walk to the end
   """
-  if runner.born_at() is None and runner.age() is 1:
+  if runner.born_at() is None and runner.age() == 1:
     runner.clone(RelativeDirection.LEFT, "Lefty")
     runner.clone(RelativeDirection.RIGHT, "Mr. Right")
   return RelativeDirection.FORWARD
@@ -31,6 +31,21 @@ class AlgorithmWithAPast:
   what_step_is_it: int = 0
 
   def i_know_the_way(self, runner: Runner) -> Direction:
+    """
+    I know the way (as long as you pick a size of 15x15 and seed of 19790122,
+    and http://repl.it hasn't changed their random number generator)
+    """
+    U = AbsoluteDirection.UP
+    R = AbsoluteDirection.RIGHT
+    D = AbsoluteDirection.DOWN
+    the_way = [R, R, R, U, U, R, R, U, R, R, R,
+               R, U, U, U, R, U, R, R, R, R]
+
+    next_move = the_way[self.what_step_is_it]
+    self.what_step_is_it += 1
+    return next_move
+
+  def i_know_the_way_linux(self, runner: Runner) -> Direction:
     """
     I know the way (as long as you pick a size of 15x15 and seed of 19790122)
     """
@@ -43,6 +58,7 @@ class AlgorithmWithAPast:
     next_move = the_way[self.what_step_is_it]
     self.what_step_is_it += 1
     return next_move
+
 
 
 if __name__ == '__main__':
@@ -66,7 +82,8 @@ if __name__ == '__main__':
   choices = [
       ('Keyboard movement (absolute)', ask_the_user),
       ('Keyboard movement (relative)', confuse_the_user),
-      ('I know the way!', AlgorithmWithAPast().i_know_the_way),
+      ('I know the way! (repl.it)', AlgorithmWithAPast().i_know_the_way),
+      ('I know the way! (linux)', AlgorithmWithAPast().i_know_the_way_linux),
       ('Multi-me', multi_me)
   ]
   print("Algorithms: ")
