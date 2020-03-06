@@ -8,7 +8,9 @@ from maze import Direction, AbsoluteDirection, RelativeDirection, Maze, Point
 
 class Runner:
   def can_move(self, direction: Direction) -> bool:
-    """Returns True if there are no walls blocking movement in the given direction"""
+    """
+    Returns True if there are no walls blocking movement in the given direction
+    """
     pass
 
   def heading(self) -> AbsoluteDirection:
@@ -17,31 +19,41 @@ class Runner:
 
   def ask_relative(self) -> RelativeDirection:
     """
-    Prompts the user which direction they want to go, relative to the current heading.
-    Use the arrow keys or "wasd" to select a direction. Pressing ESC or q will raise
-    an exception.
+    Prompts the user which direction they want to go, relative to the current
+    heading. Use the arrow keys or "wasd" to select a direction. Pressing ESC or
+    q will raise an exception.
     """
     pass
 
   def ask_absolute(self) -> AbsoluteDirection:
     """
-    Prompts the user which direction they want to go, in absolute terms. Use the arrow keys
-    or "wasd" to select a direction. Pressing ESC or q will raise an exception.
+    Prompts the user which direction they want to go, in absolute terms. Use the
+    arrow keys or "wasd" to select a direction. Pressing ESC or q will raise an
+    exception.
     """
     pass
 
 
-# This is the type needed when creating a new runner. The Algorithm must be given when
-# calling the MazeRunner.run method, as it determines what path will be taken.
+# This is the type needed when creating a new runner. The Algorithm must be
+#  given when calling the MazeRunner.run method, as it determines what path will
+#  be taken.
 Algorithm = Callable[[Runner], Direction]
 
 
 class MazeRunner:
   """Curses based console maze runner"""
-  _maze: Maze
+  maze: Maze
   _delay_time: float
+  _runners: List['_RunnerImpl'] = []
+  _crashed: List['_RunnerImpl'] = []
 
-  def __init__(self, width, height, maze_seed=None, walk_seed=None, seed=None, delay_time=0.1):
+  def __init__(self,
+               width,
+               height,
+               maze_seed=None,
+               walk_seed=None,
+               seed=None,
+               delay_time=0.1):
     self._delay_time = delay_time
     if seed is not None:
       maze_seed = maze_seed if maze_seed is not None else seed
@@ -52,7 +64,7 @@ class MazeRunner:
                                                         s=maze_seed))
     time.sleep(1)
     random.seed(maze_seed)
-    self._maze = Maze(width, height)
+    self.maze = Maze(width, height)
     random.seed(walk_seed)
 
   def run(self, algorithm: Algorithm):
@@ -63,7 +75,7 @@ class MazeRunner:
     screen.clear()
     screen.refresh()
 
-    self.runners = [_RunnerImpl(self, self._maze.start, screen)]
+    self._runners.append(_RunnerImpl(self, self.maze.start, screen))
 
     # Setup the colors we're going to use
     curses.start_color()
@@ -73,7 +85,7 @@ class MazeRunner:
 
     # No need to regenerate the maze every time, it never changes. Figure out
     # the max dimensions and allocate a curses pad for drawing the maze
-    maze_lines: str = str(self._maze)
+    maze_lines: str = str(self.maze)
     maze_char_h: int = len(maze_lines.split('\n')) + 1
     maze_char_w: int = max([len(x) for x in maze_lines.split('\n')])
 
@@ -87,7 +99,7 @@ class MazeRunner:
     maze_screen.bkgd(' ', curses.color_pair(1))
 
     # Create screen for the status field
-    status_screen = curses.newwin(3, maze_char_w - 2, maze_char_h, 1)
+    status_screen = curses.newwin(4, maze_char_w - 2, maze_char_h, 1)
     status_screen.bkgd(' ', curses.color_pair(3))
     status_screen.box()
 
@@ -101,23 +113,32 @@ class MazeRunner:
       # Draw the maze and runners
       maze_screen.clear()
       maze_screen.addstr(0, 0, maze_lines)
-      for runner in self.runners:
+      for runner in self._runners:
         p: Point = runner.char_position()
         maze_screen.addstr(p.y, p.x, runner.display())
+      for runner in self._crashed:
+        p: Point = runner.char_position()
+        maze_screen.addstr(p.y, p.x-1, runner.display(), curses.color_pair(2))
       maze_screen.refresh()
 
       # Draw the status area
       status_screen.clear()
-      if not winner:
-        status = f'{loop_count} steps taken'
+      blink = False
+      if winner:
+        status = f'You won in {loop_count} moves.'
+        blink = True
+      elif not self._runners:
+        status = f'You crashed into a wall after {loop_count} moves.'
+        blink = True
       else:
-        status = f'You won in {loop_count} moves. ' \
-                 f'It took {total_time:.2f} seconds.'
-      status_screen.addstr(1, 2, status, curses.A_BLINK if winner else 0)
+        status = f'{loop_count} steps taken'
+      status_screen.addstr(1, 2, status, curses.A_BLINK if blink else 0)
+      time_status = f'{total_time:.5f} seconds elapsed.'
+      status_screen.addstr(2, 2, time_status, curses.A_BLINK if blink else 0)
       status_screen.refresh()
 
       # If we found our winner, pause until a key is pressed then quit.
-      if winner:
+      if winner or not self._runners:
         screen.getch()
         break
 
@@ -125,18 +146,25 @@ class MazeRunner:
       loop_count += 1
       start_time = time.time()
       i: int = 0
-      while i < len(self.runners):
+      while i < len(self._runners):
         # Since the algorithm can ask a runner to duplicate itself, we need
         # to iterate until we hit the end of the list, even if the size of
         # the list is growing during the iteration.
-        runner = self.runners[i]
-        i += 1
+        runner = self._runners[i]
 
         direction = algorithm(runner)
-        runner.move(direction)
-        if runner.position == self._maze.end:
-          winner = runner
-          break
+        moved = runner.move(direction)
+        if not moved:
+          # If we gave a command that didn't result in a move, we consider the
+          # runner dead and remove it.
+          self._crashed.append(self._runners[i])
+          del self._runners[i]
+          continue
+        i += 1
+
+        if runner.position == self.maze.end:
+            winner = runner
+            break
       end_time = time.time()
       elapsed = end_time - start_time
       total_time += elapsed
@@ -149,23 +177,22 @@ class _RunnerImpl(Runner):
   parent: MazeRunner
   position: Point
   history: List[Point]
+  _heading: AbsoluteDirection
 
   def __init__(self, parent: MazeRunner, position: Point, screen):
     self.parent = parent
     self.position = position
     self.history = []
     self.screen = screen
+    # We always start on the left edge, so we know we're going right to start
+    self._heading = AbsoluteDirection.RIGHT
 
   def can_move(self, direction: Direction) -> bool:
     abs_direction: AbsoluteDirection = self._to_absolue(direction)
-    return self.parent._maze.can_move(self.position, abs_direction)
+    return self.parent.maze.can_move(self.position, abs_direction)
 
   def heading(self) -> AbsoluteDirection:
-    if not self.history:
-      # We always start on the left edge, so we know we're going right to start
-      return AbsoluteDirection.RIGHT
-    else:
-      return Maze.heading(self.history[-1], self.position)
+    return self._heading
 
   def ask_relative(self) -> RelativeDirection:
     abs_dir = self.ask_absolute()
@@ -198,11 +225,14 @@ class _RunnerImpl(Runner):
   def char_position(self) -> Point:
     return Maze.char_position(self.position)
 
-  def move(self, direction: Direction) -> None:
-    direction = self._to_absolue(direction)
-    if self.can_move(direction):
+  def move(self, direction: Direction) -> bool:
+    abs_direction: AbsoluteDirection = self._to_absolue(direction)
+    self._heading = abs_direction
+    if abs_direction != AbsoluteDirection.NONE and self.can_move(abs_direction):
       self.history.append(self.position)
-      self.position = Maze.move(self.position, direction)
+      self.position = Maze.move(self.position, abs_direction)
+      return True
+    return False
 
   def _to_absolue(self, direction: Direction) -> AbsoluteDirection:
     if isinstance(direction, AbsoluteDirection):
