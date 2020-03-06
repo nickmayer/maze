@@ -22,11 +22,45 @@ class RelativeDirection(Enum):
 
 @unique
 class AbsoluteDirection(Enum):
-  NONE = auto()
-  UP = auto()
-  DOWN = auto()
-  LEFT = auto()
-  RIGHT = auto()
+  NONE = 0
+  UP = 1
+  RIGHT = 2
+  DOWN = 3
+  LEFT = 4
+
+  def absolute(self, other: RelativeDirection) -> AbsoluteDirection:
+    if self == AbsoluteDirection.NONE or other == RelativeDirection.NONE:
+      return AbsoluteDirection.NONE
+    # NOTE: This depends on the specific enum values above being order clockwise.
+    offset: int
+    if other == RelativeDirection.FORWARD:
+      offset = 0
+    elif other == RelativeDirection.LEFT:
+      offset = -1
+    elif other == RelativeDirection.BACKWARD:
+      offset = 2
+    elif other == RelativeDirection.RIGHT:
+      offset = 1
+    else:
+      raise Exception(f'Invalid direction {self} {other}')
+    # This math is confusing. First we have to subtract 1 to go from 0 to 3, then we add the 1 back after
+    #  the modulo 4 to get back in the right range (since we should never have NONE which is 0).
+    return AbsoluteDirection((self.value - 1 + offset) % 4 + 1)
+
+  def relative(self, other: AbsoluteDirection) -> RelativeDirection:
+    if self == AbsoluteDirection.NONE or other == RelativeDirection.NONE:
+      return RelativeDirection.NONE
+    # NOTE: This depends on the specific enum values above being order clockwise.
+    delta = (self.value - other.value) % 4
+    if delta == 0:
+      return RelativeDirection.FORWARD
+    if delta == 1:
+      return RelativeDirection.LEFT
+    if delta == 2:
+      return RelativeDirection.BACKWARD
+    if delta == 3:
+      return RelativeDirection.RIGHT
+    raise Exception(f'Invalid direction {self} {other}')
 
 
 # Generic direction can be either relative (up, down, etc.) or cardinal (north, south, etc.)
@@ -75,14 +109,24 @@ class Maze(object):
   def char_position(position: Point) -> Point:
     return Point(position.x * 4 + 2, position.y * 2 + 1)
 
-  def can_move(self, position: Point, direction: Direction):
+  def can_move(self, position: Point, direction: AbsoluteDirection):
     target = self.move(position, direction)
     return self._cells[position].connected_to(target)
 
   @staticmethod
-  def move(position: Point, direction: Direction):
-    # TODO: Convert relative to absolute first
+  def heading(start: Point, end: Point) -> AbsoluteDirection:
+    if start.above() == end:
+      return AbsoluteDirection.UP
+    elif start.below() == end:
+      return AbsoluteDirection.DOWN
+    elif start.left() == end:
+      return AbsoluteDirection.LEFT
+    elif start.right() == end:
+      return AbsoluteDirection.RIGHT
+    return AbsoluteDirection.NONE
 
+  @staticmethod
+  def move(position: Point, direction: AbsoluteDirection):
     if direction == AbsoluteDirection.NONE:
       return position
     elif direction == AbsoluteDirection.UP:
@@ -284,4 +328,5 @@ class Maze(object):
 
     lines.append(bottom)
     return '\n'.join(lines)
+
 

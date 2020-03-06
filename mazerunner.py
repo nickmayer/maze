@@ -7,7 +7,10 @@ from maze import Direction, AbsoluteDirection, RelativeDirection, Maze, Point
 
 
 class Runner:
-  def can_move(self, direction: Direction):
+  def can_move(self, direction: Direction) -> bool:
+    pass
+
+  def heading(self) -> AbsoluteDirection:
     pass
 
   def ask_relative(self) -> RelativeDirection:
@@ -16,31 +19,46 @@ class Runner:
   def ask_absolute(self) -> AbsoluteDirection:
     pass
 
-  def name(self) -> str:
-    pass
-
 
 class _RunnerImpl(Runner):
   """Data for a person running the maze"""
   maze: Maze
   position: Point
-  symbol: str
   history: List[Point]
 
   def __init__(self, maze: Maze, position: Point, screen):
     self.maze = maze
     self.position = position
     self.history = []
-    self.symbol = '@'
     self.screen = screen
 
-  def can_move(self, direction: Direction):
-    return self.maze.can_move(self.position, direction)
+  def can_move(self, direction: Direction) -> bool:
+    abs_direction: AbsoluteDirection = self._to_absolue(direction)
+    return self.maze.can_move(self.position, abs_direction)
+
+  def heading(self) -> AbsoluteDirection:
+    if not self.history:
+      # We always start on the left edge, so we know we're going right to start
+      return AbsoluteDirection.RIGHT
+    else:
+      return Maze.heading(self.history[-1], self.position)
+
+  def ask_relative(self) -> RelativeDirection:
+    abs_dir = self.ask_absolute()
+    if abs_dir == AbsoluteDirection.UP:
+      return RelativeDirection.FORWARD
+    elif abs_dir == AbsoluteDirection.DOWN:
+      return RelativeDirection.BACKWARD
+    elif abs_dir == AbsoluteDirection.LEFT:
+      return RelativeDirection.LEFT
+    elif abs_dir == AbsoluteDirection.RIGHT:
+      return RelativeDirection.RIGHT
+    return RelativeDirection.NONE
 
   def ask_absolute(self) -> AbsoluteDirection:
     c = self.screen.getch()
     direction = None
-    while direction == None:
+    while direction is None:
       if c == curses.KEY_UP or c == ord('w'):
         direction = AbsoluteDirection.UP
       elif c == curses.KEY_DOWN or c == ord('s'):
@@ -53,13 +71,38 @@ class _RunnerImpl(Runner):
         raise KeyboardInterrupt("User Requested to Quit")
     return direction
 
-  def char_position(self):
+  def char_position(self) -> Point:
     return Maze.char_position(self.position)
 
-  def move(self, direction):
+  def move(self, direction: Direction) -> None:
+    direction = self._to_absolue(direction)
     if self.can_move(direction):
       self.history.append(self.position)
       self.position = Maze.move(self.position, direction)
+
+  def _to_absolue(self, direction: Direction) -> AbsoluteDirection:
+    if isinstance(direction, AbsoluteDirection):
+      return direction
+    elif isinstance(direction, RelativeDirection):
+      return self.heading().absolute(direction)
+
+    raise Exception(f"Unexpected direction {direction}")
+
+  def _to_relative(self, direction: Direction) -> RelativeDirection:
+    if isinstance(direction, RelativeDirection):
+      return direction
+    elif isinstance(direction, AbsoluteDirection):
+      return self.heading().relative(direction)
+    raise Exception(f"Unexpected direction {direction}")
+
+  def display(self) -> str:
+    h = {
+      AbsoluteDirection.UP: '▲',
+      AbsoluteDirection.DOWN: '▼',
+      AbsoluteDirection.LEFT: '◀',
+      AbsoluteDirection.RIGHT: '▶'
+    }
+    return h.get(self.heading(), '@')
 
 
 class MazeRunner:
@@ -128,7 +171,7 @@ class MazeRunner:
       maze_screen.addstr(0, 0, maze_lines)
       for runner in self.runners:
         p: Point = runner.char_position()
-        maze_screen.addstr(p.y, p.x, runner.symbol)
+        maze_screen.addstr(p.y, p.x, runner.display())
       maze_screen.refresh()
 
       # Draw the status area
