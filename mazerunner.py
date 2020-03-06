@@ -51,21 +51,15 @@ class MazeRunner:
                width,
                height,
                maze_seed=None,
-               walk_seed=None,
-               seed=None,
                delay_time=0.1):
     self._delay_time = delay_time
-    if seed is not None:
-      maze_seed = maze_seed if maze_seed is not None else seed
-      walk_seed = walk_seed if walk_seed is not None else seed
-
     print("Creating the Maze ({w}x{h} seed={s})".format(w=width,
                                                         h=height,
                                                         s=maze_seed))
     time.sleep(1)
-    random.seed(maze_seed)
-    self.maze = Maze(width, height)
-    random.seed(walk_seed)
+    r = random.Random()
+    r.seed(maze_seed, version=1)
+    self.maze = Maze(width, height, r)
 
   def run(self, algorithm: Algorithm):
     """Run the maze. Returns true if it was solved"""

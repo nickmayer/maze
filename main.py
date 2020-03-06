@@ -31,6 +31,7 @@ class AlgorithmWithAPast:
     self.what_step_is_it += 1
     return next_move
 
+
 if __name__ == '__main__':
   if len(sys.argv) > 1:
     width = int(sys.argv[1])

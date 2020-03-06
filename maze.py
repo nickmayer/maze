@@ -5,6 +5,7 @@ import random
 from dataclasses import dataclass
 from dataclasses import field
 from enum import Enum, unique, auto
+from typing import Any
 from typing import Dict, Union
 from typing import Iterable
 from typing import List
@@ -98,15 +99,17 @@ class Maze(object):
   width: int
   height: int
   start: Point
+  _random: Any
 
-  def __init__(self, width=20, height=10):
+  def __init__(self, width=20, height=10, generator=random):
     """
     Creates a new maze with the given sizes, with all walls standing.
     """
+    self._random = generator
     self.width = width
     self.height = height
-    self.start = Point(0, random.randrange(0, height))
-    self.end = Point(width - 1, random.randrange(0, height))
+    self.start = Point(0, self._random.randrange(0, height))
+    self.end = Point(width - 1, self._random.randrange(0, height))
     self._create_maze()
 
   @staticmethod
@@ -240,14 +243,14 @@ class Maze(object):
 
     while len(adj_cells) > 0:
       # Pick a random cell from the remaining adjacencies
-      cell = random.sample(adj_cells, 1)[0]
+      cell = self._random.sample(adj_cells, 1)[0]
       adj_cells.remove(cell)
 
       # Chose a random wall that connects to the maze, and remove it
       adj = set(get_adjacent_points(cell))
       connections = [p for p in adj if (p == self.start or
                                         self._cells[p].connected())]
-      connect_to = random.choice(connections)
+      connect_to = self._random.choice(connections)
       self._cells[cell].connect(connect_to)
       self._cells[connect_to].connect(cell)
 
