@@ -27,46 +27,62 @@ class MazeRunner:
     return curses.wrapper(lambda stdscr: self._run(stdscr))
 
   def _run(self, screen) -> bool:
+    screen.clear()
+    screen.refresh()
+
+    # Setup the colors we're going to use
+    curses.start_color()
+    curses.init_pair(1, curses.COLOR_CYAN, curses.COLOR_BLACK)
+    curses.init_pair(2, curses.COLOR_RED, curses.COLOR_BLACK)
+    curses.init_pair(3, curses.COLOR_BLACK, curses.COLOR_CYAN)
+
     # No need to regenerate the maze every time, it never changes. Figure out
     # the max dimensions and allocate a curses pad for drawing the maze
     maze_lines: str = str(self.maze)
     maze_char_h: int = len(maze_lines.split('\n')) + 1
-    maze_char_w: int = max([len(x) for x in maze_lines.split('\n')]) + 1
+    maze_char_w: int = max([len(x) for x in maze_lines.split('\n')])
 
-    # turn off input echoing, disable the cursor
+    # turn off input echoing, disable the cursor, etc
     curses.noecho()
     curses.curs_set(0)
-    # respond to keys immediately (don't wait for enter)
     curses.cbreak()
 
-    # Create screens for the maze and status field
-    maze_screen = curses.newwin(maze_char_h, maze_char_w, 0, 0)
-    status_screen = curses.newwin(2, maze_char_w, maze_char_h, 0)
+    # Create screen for the maze
+    maze_screen = curses.newwin(maze_char_h, maze_char_w + 1, 0, 0)
+
+    # Create screen for the status field
+    status_screen = curses.newwin(3, maze_char_w - 2, maze_char_h, 1)
+    status_screen.bkgd(' ', curses.color_pair(3))
+    status_screen.box()
 
     # Loop where on character input
     status = ''
     while True:
+      screen.refresh()
+
       maze_screen.clear()
       maze_screen.addstr(0, 0, maze_lines)
       maze_screen.refresh()
 
       status_screen.clear()
-      status_screen.addstr(0, 5, status)
+      status_screen.addstr(1, 2, f'{status}')
       status_screen.refresh()
 
       c = screen.getch()
       if c == curses.KEY_UP:
-        status = '⯅'
+        status_key = '▲'
       elif c == curses.KEY_DOWN:
-        status = '⯆'
+        status_key = '▼'
       elif c == curses.KEY_LEFT:
-        status = '⯇'
+        status_key = '◀'
       elif c == curses.KEY_RIGHT:
-        status = '⯈'
+        status_key = '▶'
       elif c == 27 or c == ord('q') or c == ord('Q'):
         # 27 is ESC, doesn't have a constant
         break
       else:
-        status = 'Key {} {} {}'.format(c, curses.unctrl(c), curses.keyname(c))
+        status_key = 'Key {} {} {}'.format(c, curses.unctrl(c), curses.keyname(c))
+
+      status = f'Pressed {status_key}'
 
     return False

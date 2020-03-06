@@ -32,9 +32,6 @@ class Maze(object):
     self.height = height
     self.start = Point(0, random.randrange(0, height))
     self.end = Point(width - 1, random.randrange(0, height))
-
-    test = str(self)
-
     self._create_maze()
 
   @dataclass
