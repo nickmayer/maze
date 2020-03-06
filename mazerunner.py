@@ -1,8 +1,65 @@
 import curses
 import random
 import time
+from typing import Callable, List
 
-from maze import Maze
+from maze import Direction, AbsoluteDirection, RelativeDirection, Maze, Point
+
+
+class Runner:
+  def can_move(self, direction: Direction):
+    pass
+
+  def ask_relative(self) -> RelativeDirection:
+    pass
+
+  def ask_absolute(self) -> AbsoluteDirection:
+    pass
+
+  def name(self) -> str:
+    pass
+
+
+class _RunnerImpl(Runner):
+  """Data for a person running the maze"""
+  maze: Maze
+  position: Point
+  symbol: str
+  history: List[Point]
+
+  def __init__(self, maze: Maze, position: Point, screen):
+    self.maze = maze
+    self.position = position
+    self.history = []
+    self.symbol = '@'
+    self.screen = screen
+
+  def can_move(self, direction: Direction):
+    return self.maze.can_move(self.position, direction)
+
+  def ask_absolute(self) -> AbsoluteDirection:
+    c = self.screen.getch()
+    direction = None
+    while direction == None:
+      if c == curses.KEY_UP or c == ord('w'):
+        direction = AbsoluteDirection.UP
+      elif c == curses.KEY_DOWN or c == ord('s'):
+        direction = AbsoluteDirection.DOWN
+      elif c == curses.KEY_LEFT or c == ord('a'):
+        direction = AbsoluteDirection.LEFT
+      elif c == curses.KEY_RIGHT or c == ord('d'):
+        direction = AbsoluteDirection.RIGHT
+      elif c == 27 or c == ord('q') or c == ord('Q'):
+        raise KeyboardInterrupt("User Requested to Quit")
+    return direction
+
+  def _char_position(self):
+    return Maze.char_position(self.position)
+
+  def _move(self, direction):
+    if self.can_move(direction):
+      self.history.append(self.position)
+      self.position = Maze.move(self.position, direction)
 
 
 class MazeRunner:
@@ -22,13 +79,15 @@ class MazeRunner:
     self.maze = Maze(width, height)
     random.seed(walk_seed)
 
-  def run(self) -> bool:
+  def run(self, algorithm: Callable[[Runner], Direction]) -> bool:
     """Run the maze. Returns true if it was solved"""
-    return curses.wrapper(lambda stdscr: self._run(stdscr))
+    return curses.wrapper(lambda stdscr: self._run(stdscr, algorithm))
 
-  def _run(self, screen) -> bool:
+  def _run(self, screen, algorithm: Callable[[Runner], Direction]) -> bool:
     screen.clear()
     screen.refresh()
+
+    self.runners = [_RunnerImpl(self.maze, self.maze.start, screen)]
 
     # Setup the colors we're going to use
     curses.start_color()
@@ -60,29 +119,22 @@ class MazeRunner:
     while True:
       screen.refresh()
 
+      # Draw the maze and runners
       maze_screen.clear()
       maze_screen.addstr(0, 0, maze_lines)
+      for runner in self.runners:
+        p: Point = runner._char_position()
+        maze_screen.addstr(p.y, p.x, runner.symbol)
       maze_screen.refresh()
 
+      # Draw the status area
       status_screen.clear()
       status_screen.addstr(1, 2, f'{status}')
       status_screen.refresh()
 
-      c = screen.getch()
-      if c == curses.KEY_UP:
-        status_key = '▲'
-      elif c == curses.KEY_DOWN:
-        status_key = '▼'
-      elif c == curses.KEY_LEFT:
-        status_key = '◀'
-      elif c == curses.KEY_RIGHT:
-        status_key = '▶'
-      elif c == 27 or c == ord('q') or c == ord('Q'):
-        # 27 is ESC, doesn't have a constant
-        break
-      else:
-        status_key = 'Key {} {} {}'.format(c, curses.unctrl(c), curses.keyname(c))
-
-      status = f'Pressed {status_key}'
+      # Use the given algorithm to advance the paths
+      for runner in self.runners:
+        direction = algorithm(runner)
+        runner._move(direction)
 
     return False

@@ -1,11 +1,36 @@
 # -*- coding: utf-8 -*-
+from __future__ import annotations
+
 import random
 from dataclasses import dataclass
 from dataclasses import field
-from typing import Dict
+from enum import Enum, unique, auto
+from typing import Dict, Union
 from typing import Iterable
 from typing import List
 from typing import Set
+
+
+@unique
+class RelativeDirection(Enum):
+  NONE = auto()
+  FORWARD = auto()
+  BACKWARD = auto()
+  LEFT = auto()
+  RIGHT = auto()
+
+
+@unique
+class AbsoluteDirection(Enum):
+  NONE = auto()
+  UP = auto()
+  DOWN = auto()
+  LEFT = auto()
+  RIGHT = auto()
+
+
+# Generic direction can be either relative (up, down, etc.) or cardinal (north, south, etc.)
+Direction = Union[RelativeDirection, AbsoluteDirection]
 
 
 @dataclass(order=True, frozen=True)
@@ -16,6 +41,18 @@ class Point:
 
   def __repr__(self):
     return f'({self.x}, {self.y})'
+
+  def above(self) -> Point:
+    return Point(self.x, self.y - 1)
+
+  def below(self) -> Point:
+    return Point(self.x, self.y + 1)
+
+  def left(self) -> Point:
+    return Point(self.x - 1, self.y)
+
+  def right(self) -> Point:
+    return Point(self.x + 1, self.y)
 
 
 class Maze(object):
@@ -34,32 +71,60 @@ class Maze(object):
     self.end = Point(width - 1, random.randrange(0, height))
     self._create_maze()
 
+  @staticmethod
+  def char_position(position: Point) -> Point:
+    return Point(position.x * 4 + 2, position.y * 2 + 1)
+
+  def can_move(self, position: Point, direction: Direction):
+    target = self.move(position, direction)
+    return self._cells[position].connected_to(target)
+
+  @staticmethod
+  def move(position: Point, direction: Direction):
+    # TODO: Convert relative to absolute first
+
+    if direction == AbsoluteDirection.NONE:
+      return position
+    elif direction == AbsoluteDirection.UP:
+      return position.above()
+    elif direction == AbsoluteDirection.DOWN:
+      return position.below()
+    elif direction == AbsoluteDirection.LEFT:
+      return position.left()
+    elif direction == AbsoluteDirection.RIGHT:
+      return position.right()
+
+    raise Exception(f"Unexpected direction {direction}")
+
   @dataclass
   class _Cell:
     """Represents a cell in the maze"""
-    position: Point
-    connections: Set[Point] = field(default_factory=set)
+    _position: Point
+    _connections: Set[Point] = field(default_factory=set)
 
     def connect(self, connect_to):
-      self.connections.add(connect_to)
+      self._connections.add(connect_to)
 
     def wall_above(self):
-      return Point(self.position.x, self.position.y - 1) not in self.connections
+      return self._position.above() not in self._connections
 
     def wall_below(self):
-      return Point(self.position.x, self.position.y + 1) not in self.connections
+      return self._position.below() not in self._connections
 
     def wall_left(self):
-      return Point(self.position.x - 1, self.position.y) not in self.connections
+      return self._position.left() not in self._connections
 
     def wall_right(self):
-      return Point(self.position.x + 1, self.position.y) not in self.connections
+      return self._position.right() not in self._connections
 
     def connected(self) -> bool:
-      if self.connections:
+      if self._connections:
         return True
       else:
         return False
+
+    def connected_to(self, target: Point):
+      return target in self._connections
 
   class _Cells(dict):
     """
@@ -160,12 +225,13 @@ class Maze(object):
     """
     # For different draw styles:
     #  https://en.wikipedia.org/wiki/Box-drawing_character
+    #  http://www.fileformat.info/info/unicode/block/box_drawing/list.htm
     d = {
         'SENW': '┼',
         'SEN': '├', 'ENW': '┴', 'SNW': '┤', 'SEW': '┬',
         'EN': '└', 'NW': '┘', 'SE': '┌', 'SW': '┐',
-        'SN': '│', 'N': '│', 'S': '│',
-        'EW': '─', 'E': '─', 'W': '─'
+        'SN': '│', 'N': '╵', 'S': '╷',
+        'EW': '─', 'W': '╴', 'E': '╶'
     }
 
     def get_corner(p: Point) -> str:
@@ -218,3 +284,4 @@ class Maze(object):
 
     lines.append(bottom)
     return '\n'.join(lines)
+

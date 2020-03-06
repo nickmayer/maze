@@ -1,6 +1,11 @@
 #!/usr/bin/python3
 import sys
-from mazerunner import MazeRunner
+from mazerunner import MazeRunner, Runner, Direction
+
+
+def ask_the_user(runner: Runner) -> Direction:
+  return runner.ask_absolute()
+
 
 if __name__ == '__main__':
   if len(sys.argv) > 1:
@@ -19,4 +24,7 @@ if __name__ == '__main__':
     maze_seed = 19790122
 
   maze = MazeRunner(width, height, maze_seed=maze_seed)
-  maze.run()
+  try:
+    maze.run(ask_the_user)
+  except KeyboardInterrupt:
+    exit(1)
