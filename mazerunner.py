@@ -53,10 +53,10 @@ class _RunnerImpl(Runner):
         raise KeyboardInterrupt("User Requested to Quit")
     return direction
 
-  def _char_position(self):
+  def char_position(self):
     return Maze.char_position(self.position)
 
-  def _move(self, direction):
+  def move(self, direction):
     if self.can_move(direction):
       self.history.append(self.position)
       self.position = Maze.move(self.position, direction)
@@ -65,6 +65,7 @@ class _RunnerImpl(Runner):
 class MazeRunner:
   """Curses based console maze runner"""
   maze: Maze
+  delay_time: float = 0.1
 
   def __init__(self, width, height, maze_seed=None, walk_seed=None, seed=None):
     if seed is not None:
@@ -79,11 +80,11 @@ class MazeRunner:
     self.maze = Maze(width, height)
     random.seed(walk_seed)
 
-  def run(self, algorithm: Callable[[Runner], Direction]) -> bool:
+  def run(self, algorithm: Callable[[Runner], Direction]):
     """Run the maze. Returns true if it was solved"""
-    return curses.wrapper(lambda stdscr: self._run(stdscr, algorithm))
+    curses.wrapper(lambda stdscr: self._run(stdscr, algorithm))
 
-  def _run(self, screen, algorithm: Callable[[Runner], Direction]) -> bool:
+  def _run(self, screen, algorithm: Callable[[Runner], Direction]):
     screen.clear()
     screen.refresh()
 
@@ -91,7 +92,7 @@ class MazeRunner:
 
     # Setup the colors we're going to use
     curses.start_color()
-    curses.init_pair(1, curses.COLOR_CYAN, curses.COLOR_BLACK)
+    curses.init_pair(1, curses.COLOR_YELLOW, curses.COLOR_BLACK)
     curses.init_pair(2, curses.COLOR_RED, curses.COLOR_BLACK)
     curses.init_pair(3, curses.COLOR_BLACK, curses.COLOR_CYAN)
 
@@ -108,6 +109,7 @@ class MazeRunner:
 
     # Create screen for the maze
     maze_screen = curses.newwin(maze_char_h, maze_char_w + 1, 0, 0)
+    maze_screen.bkgd(' ', curses.color_pair(1))
 
     # Create screen for the status field
     status_screen = curses.newwin(3, maze_char_w - 2, maze_char_h, 1)
@@ -115,7 +117,9 @@ class MazeRunner:
     status_screen.box()
 
     # Loop where on character input
-    status = ''
+    winner = None
+    loop_count: int = 0
+    total_time = 0
     while True:
       screen.refresh()
 
@@ -123,18 +127,35 @@ class MazeRunner:
       maze_screen.clear()
       maze_screen.addstr(0, 0, maze_lines)
       for runner in self.runners:
-        p: Point = runner._char_position()
+        p: Point = runner.char_position()
         maze_screen.addstr(p.y, p.x, runner.symbol)
       maze_screen.refresh()
 
       # Draw the status area
       status_screen.clear()
-      status_screen.addstr(1, 2, f'{status}')
+      if not winner:
+        status = f'{loop_count} steps taken'
+      else:
+        status = f'You won in {loop_count} moves. It took {total_time:.2f} seconds.'
+      status_screen.addstr(1, 2, status, curses.A_BLINK if winner else 0)
       status_screen.refresh()
 
+      # If we found our winner, pause until a key is pressed then quit.
+      if winner:
+        screen.getch()
+        break
+
       # Use the given algorithm to advance the paths
+      loop_count += 1
+      start_time = time.time()
       for runner in self.runners:
         direction = algorithm(runner)
-        runner._move(direction)
-
-    return False
+        runner.move(direction)
+        if runner.position == self.maze.end:
+          winner = runner
+          break
+      end_time = time.time()
+      elapsed = end_time - start_time
+      total_time += elapsed
+      if elapsed < self.delay_time:
+        time.sleep(self.delay_time - elapsed)
